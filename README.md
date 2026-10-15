@@ -1,14 +1,21 @@
 # BoseQC
 
-Minimal open-source macOS controller for Bose QuietComfort headphones. Talks **BMAP over BLE** (service `FEBE`) via CoreBluetooth — scan, connect, read battery / name / noise mode, switch modes.
+Simple macOS controller for Bose QuietComfort headphones.
 
-This is intentionally small. It is not a Bose Music UI clone.
+Talks **BMAP over Classic Bluetooth RFCOMM channel 2** — the same path as [bosectl](https://github.com/aaronsb/bosectl) and [ANChor](https://github.com/JimmyCalhoun/ANChor). Not a Bose Music UI clone; not BLE GATT.
+
+## Features
+
+- Finds paired Bose headphones (one row per address — no duplicate LE-/classic entries)
+- Connects over RFCOMM
+- Reads battery + current mode
+- Loads mode list **from the device** (AudioModes config), then switches modes
 
 ## Requirements
 
 - macOS 14+
-- Xcode 16+
-- Bose headphones that expose BMAP over BLE (QuietComfort / Ultra class). On this Mac the paired set is **Dark Star** (QuietComfort Headphones, product `0x4075`).
+- Headphones already paired in System Settings → Bluetooth  
+  On this Mac: **Dark Star** / **Onyx Star** (QuietComfort, product `0x4075`)
 
 ## Run
 
@@ -25,27 +32,19 @@ xcodebuild -scheme BoseQC -configuration Debug -derivedDataPath ../.derived buil
 open ../.derived/Build/Products/Debug/BoseQC.app
 ```
 
-Grant Bluetooth permission when macOS asks.
+1. Power the headphones and connect them in System Settings if needed.
+2. Open BoseQC → **Find headphones** → **Connect**.
+3. Modes appear from the device; tap one to switch.
 
-## Use
+## Why not BLE?
 
-1. Power the headphones and keep them nearby.
-2. Tap **Scan**.
-3. Select the device → **Connect**.
-4. Use Quiet / Aware / Commute (mode indices 0–2 — exact mapping is device-specific) or the raw index stepper.
-5. **Refresh** re-queries battery, name, and current mode.
+BLE FEBE can show `Device error 0x14` / timeouts on QuietComfort Headphones. ANChor and bosectl use RFCOMM for the same BMAP packets; that is the reliable path here.
 
 ## Layout
 
 ```
 BoseQC/
-  BMAP/BmapPacket.swift          # packet + BLE segmentation
-  Bluetooth/BoseBluetoothClient.swift
-  UI/ContentView.swift           # one simple window
+  BMAP/BmapPacket.swift
+  Bluetooth/BoseBluetoothClient.swift   # IOBluetooth RFCOMM
+  UI/ContentView.swift
 ```
-
-## Limits
-
-- Classic Bluetooth RFCOMM (older QC35 path) is not implemented — BLE only.
-- Multipoint / EQ / shortcuts come later.
-- Mode index labels are best-effort from AudioModes config; if a preset does nothing, try the raw index after Refresh.

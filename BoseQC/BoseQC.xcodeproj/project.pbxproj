@@ -12,6 +12,7 @@
 		B10000000000000000000003 /* BoseBluetoothClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* BoseBluetoothClient.swift */; };
 		B10000000000000000000004 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* ContentView.swift */; };
 		B10000000000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* Assets.xcassets */; };
+		B10000000000000000000006 /* IOBluetooth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* IOBluetooth.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +24,7 @@
 		B20000000000000000000005 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B20000000000000000000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B20000000000000000000007 /* BoseQC.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BoseQC.entitlements; sourceTree = "<group>"; };
+		B20000000000000000000008 /* IOBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOBluetooth.framework; path = System/Library/Frameworks/IOBluetooth.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -30,6 +32,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B10000000000000000000006 /* IOBluetooth.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -41,7 +44,16 @@
 			children = (
 				B50000000000000000000002 /* BoseQC */,
 				B50000000000000000000003 /* Products */,
+				B50000000000000000000008 /* Frameworks */,
 			);
+			sourceTree = "<group>";
+		};
+		B50000000000000000000008 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000008 /* IOBluetooth.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		B50000000000000000000002 /* BoseQC */ = {

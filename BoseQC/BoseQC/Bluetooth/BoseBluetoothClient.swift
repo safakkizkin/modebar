@@ -1,34 +1,30 @@
 import Foundation
-import CoreBluetooth
+import IOBluetooth
 import Combine
 import os.log
 
-private let log = Logger(subsystem: "app.boseqc.macos", category: "ble")
+private let log = Logger(subsystem: "app.boseqc.macos", category: "rfcomm")
 
-enum BoseBLE {
-    static let service = CBUUID(string: "FEBE")
-    /// Prefer unsecure first — secure often needs bonding and silently drops writes.
-    static let unsecure = CBUUID(string: "D417C028-9818-4354-99D1-2AC09D074591")
-    static let secure = CBUUID(string: "C65B8F2F-AEE2-4C89-B758-BC4892D6F2D8")
-    static let nameHints = ["bose", "quietcomfort", "qc ", "nc ", "ultra", "onyx", "dark star"]
-}
-
+/// Same path as ANChor / bosectl: Classic Bluetooth RFCOMM + raw BMAP (no BLE segment byte).
 enum ConnectionPhase: String, Equatable {
     case idle
-    case poweredOff
-    case unauthorized
     case scanning
     case connecting
-    case discovering
     case ready
     case failed
 }
 
 struct DiscoveredHeadphone: Identifiable, Equatable {
-    var id: UUID { peripheralID }
-    var peripheralID: UUID
+    var id: String { address }
+    var address: String
     var name: String
-    var rssi: Int
+    var isConnected: Bool
+}
+
+struct DeviceMode: Identifiable, Equatable {
+    var id: UInt8 { index }
+    var index: UInt8
+    var name: String
 }
 
 struct LiveHeadphoneState: Equatable {
@@ -36,11 +32,10 @@ struct LiveHeadphoneState: Equatable {
     var batteryPercent: Int?
     var modeIndex: UInt8?
     var modeLabel: String?
+    var modes: [DeviceMode] = []
     var lastError: String?
 }
 
-/// CoreBluetooth BMAP client. Write path matches NerdySouth/bozo:
-/// always `writeWithoutResponse`, notify subscribed before any packet.
 @MainActor
 final class BoseBluetoothClient: NSObject, ObservableObject {
     @Published private(set) var phase: ConnectionPhase = .idle
@@ -48,77 +43,86 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
     @Published private(set) var state = LiveHeadphoneState()
     @Published private(set) var statusMessage: String = "Idle"
 
-    private var central: CBCentralManager!
-    private var peripheral: CBPeripheral?
-    private var writeCharacteristic: CBCharacteristic?
-    private var notifyReady = false
-    private var didBroadServiceScan = false
-    private var knownPeripherals: [UUID: CBPeripheral] = [:]
-    private let reassembler = BmapSegmenter.Reassembler()
-    private var pendingByKey: [UInt16: CheckedContinuation<BmapPacket, Error>] = [:]
-    private var sendChain: Task<Void, Never>?
+    private var channel: IOBluetoothRFCOMMChannel?
+    private var device: IOBluetoothDevice?
+    private var pending: CheckedContinuation<Data, Error>?
+    private var rxBuffer = Data()
+    private let rfcommChannelID: BluetoothRFCOMMChannelID = 2
 
-    override init() {
-        super.init()
-        central = CBCentralManager(delegate: self, queue: nil)
-    }
+    private static let nameHints = [
+        "quietcomfort", "qc ultra", "qc earbuds", "onyx", "dark star", "bose"
+    ]
 
     func startScan() {
-        discovered = []
-        guard central.state == .poweredOn else {
-            statusMessage = "Bluetooth not ready"
-            return
-        }
         phase = .scanning
-        statusMessage = "Scanning…"
-        central.scanForPeripherals(withServices: [BoseBLE.service], options: nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-            guard let self, self.phase == .scanning else { return }
-            self.central.stopScan()
-            self.central.scanForPeripherals(withServices: nil, options: nil)
+        statusMessage = "Looking for paired Bose…"
+        discovered = Self.pairedBoseDevices()
+        if discovered.isEmpty {
+            statusMessage = "No paired Bose headphones — pair in System Settings first"
+            phase = .idle
+        } else {
+            statusMessage = "\(discovered.count) device(s)"
+            phase = .idle
         }
     }
 
     func stopScan() {
-        central.stopScan()
-        if phase == .scanning {
-            phase = .idle
-            statusMessage = "Stopped"
+        phase = .idle
+        statusMessage = "Stopped"
+    }
+
+    /// Prefer already-connected Bose; otherwise first paired match.
+    func connectPreferred() {
+        startScan()
+        if let connected = discovered.first(where: \.isConnected) ?? discovered.first {
+            connect(to: connected)
         }
     }
 
     func connect(to item: DiscoveredHeadphone) {
-        guard let peripheral = central.retrievePeripherals(withIdentifiers: [item.peripheralID]).first
-                ?? knownPeripherals[item.peripheralID] else {
-            statusMessage = "Device not found"
+        guard let dev = IOBluetoothDevice(addressString: item.address) else {
+            statusMessage = "Device address invalid"
+            phase = .failed
             return
         }
-        stopScan()
-        self.peripheral = peripheral
-        peripheral.delegate = self
         phase = .connecting
-        notifyReady = false
-        didBroadServiceScan = false
         statusMessage = "Connecting…"
         state = LiveHeadphoneState(name: item.name)
-        central.connect(peripheral, options: nil)
+        device = dev
+
+        Task { @MainActor in
+            do {
+                try await openRFCOMM(to: dev)
+                phase = .ready
+                statusMessage = "Connected"
+                await refresh()
+            } catch {
+                phase = .failed
+                statusMessage = error.localizedDescription
+                state.lastError = error.localizedDescription
+            }
+        }
     }
 
     func disconnect() {
-        if let peripheral {
-            central.cancelPeripheralConnection(peripheral)
-        }
-        resetConnection(message: "Disconnected")
+        channel?.close()
+        channel = nil
+        device = nil
+        failPending(BoseError.disconnected)
+        phase = .idle
+        statusMessage = "Disconnected"
+        state = LiveHeadphoneState()
     }
 
     func refresh() async {
         guard phase == .ready else { return }
         statusMessage = "Syncing…"
         do {
-            // Serialize — parallel GETs race on one characteristic.
             _ = try await queryName()
             _ = try await queryBattery()
-            _ = try await queryMode()
+            let modes = await discoverModes()
+            state.modes = modes
+            _ = try await queryCurrentMode()
             state.lastError = nil
             statusMessage = "Ready"
         } catch {
@@ -131,16 +135,19 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
         guard phase == .ready else { return }
         statusMessage = "Changing mode…"
         do {
-            // bozo: START with voice_prompt = 0x00; may not always STATUS back.
-            _ = try await send(BmapCommands.setMode(index: index, voicePrompt: false), waitForReply: true)
-            try await Task.sleep(nanoseconds: 250_000_000)
-            _ = try await queryMode()
+            // ANChor: START → expect RESULT (op 6)
+            let packet = BmapCommands.setMode(index: index, voicePrompt: false)
+            let data = try await send(packet, expectOps: [BmapOperator.result, BmapOperator.status])
+            if let reply = BmapPacket.decode(data), let idx = reply.payload.first {
+                state.modeIndex = idx
+                state.modeLabel = state.modes.first(where: { $0.index == idx })?.name ?? "Mode \(idx)"
+            } else {
+                _ = try await queryCurrentMode()
+            }
             state.lastError = nil
             statusMessage = "Ready"
         } catch {
-            // Even if START times out, re-query — some firmware applies without STATUS.
-            if let mode = try? await queryMode() {
-                state.modeIndex = mode
+            if let _ = try? await queryCurrentMode() {
                 state.lastError = nil
                 statusMessage = "Ready"
                 return
@@ -150,17 +157,90 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Queries
+    // MARK: - Paired devices (deduped by address)
+
+    private static func pairedBoseDevices() -> [DiscoveredHeadphone] {
+        guard let paired = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] else { return [] }
+        var byAddress: [String: DiscoveredHeadphone] = [:]
+        for dev in paired {
+            let name = dev.name ?? ""
+            let address = (dev.addressString ?? "").uppercased()
+            guard !address.isEmpty else { continue }
+            let lower = name.lowercased()
+            let match = nameHints.contains { lower.contains($0) }
+            guard match else { continue }
+            // One row per Classic address — BLE LE-* aliases collapse here.
+            let display = name.replacingOccurrences(of: "LE-", with: "")
+            let item = DiscoveredHeadphone(
+                address: address,
+                name: display.isEmpty ? name : display,
+                isConnected: dev.isConnected()
+            )
+            if let existing = byAddress[address] {
+                byAddress[address] = DiscoveredHeadphone(
+                    address: address,
+                    name: existing.name.count >= item.name.count ? existing.name : item.name,
+                    isConnected: existing.isConnected || item.isConnected
+                )
+            } else {
+                byAddress[address] = item
+            }
+        }
+        return byAddress.values.sorted { lhs, rhs in
+            if lhs.isConnected != rhs.isConnected { return lhs.isConnected && !rhs.isConnected }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    // MARK: - RFCOMM
+
+    private func openRFCOMM(to device: IOBluetoothDevice) async throws {
+        if !device.isConnected() {
+            let open = device.openConnection(nil)
+            guard open == kIOReturnSuccess || device.isConnected() else {
+                throw BoseError.connectFailed
+            }
+            // Wait up to 5s for classic link.
+            for _ in 0..<50 where !device.isConnected() {
+                try await Task.sleep(nanoseconds: 100_000_000)
+            }
+            guard device.isConnected() else { throw BoseError.connectFailed }
+        }
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            var chan: IOBluetoothRFCOMMChannel?
+            let result = device.openRFCOMMChannelSync(
+                &chan,
+                withChannelID: rfcommChannelID,
+                delegate: self
+            )
+            if result == kIOReturnSuccess, let chan {
+                self.channel = chan
+                // Drain unsolicited boot traffic briefly, like ANChor.
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    cont.resume()
+                }
+            } else {
+                cont.resume(throwing: BoseError.rfcommFailed(result))
+            }
+        }
+    }
+
+    // MARK: - BMAP queries
 
     private func queryBattery() async throws -> Int {
-        let packet = try await send(BmapCommands.queryBattery)
-        guard let percent = packet.payload.first.map(Int.init) else { throw BoseError.emptyPayload }
+        let data = try await send(BmapCommands.queryBattery, expectOps: [.status])
+        guard let packet = BmapPacket.decode(data), let percent = packet.payload.first.map(Int.init) else {
+            throw BoseError.emptyPayload
+        }
         state.batteryPercent = percent
         return percent
     }
 
     private func queryName() async throws -> String {
-        let packet = try await send(BmapCommands.queryName)
+        let data = try await send(BmapCommands.queryName, expectOps: [.status])
+        guard let packet = BmapPacket.decode(data) else { return state.name }
         let cleaned = packet.payload.filter { $0 != 0 }
         if let name = String(bytes: cleaned, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !name.isEmpty {
@@ -170,151 +250,144 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
         return state.name
     }
 
-    private func queryMode() async throws -> UInt8 {
-        let packet = try await send(BmapCommands.queryCurrentMode)
-        guard let index = packet.payload.first else { throw BoseError.emptyPayload }
+    private func queryCurrentMode() async throws -> UInt8 {
+        let data = try await send(BmapCommands.queryCurrentMode, expectOps: [.status])
+        guard let packet = BmapPacket.decode(data), let index = packet.payload.first else {
+            throw BoseError.emptyPayload
+        }
         state.modeIndex = index
-        if let config = try? await send(BmapCommands.queryModeConfig(index: index)),
-           config.payload.count >= 7 {
-            let end = min(38, config.payload.count)
-            let nameBytes = config.payload.subdata(in: 6..<end).prefix { $0 != 0 }
-            if let label = String(bytes: nameBytes, encoding: .utf8), !label.isEmpty {
-                state.modeLabel = label
-            } else if config.payload.count > 2 {
-                state.modeLabel = Self.promptName(config.payload[2])
-            }
+        if let known = state.modes.first(where: { $0.index == index }) {
+            state.modeLabel = known.name
+        } else if let name = try? await modeName(for: index) {
+            state.modeLabel = name
         } else {
-            state.modeLabel = ["Quiet", "Aware", "Commute"][safe: Int(index)] ?? "Mod \(index)"
+            state.modeLabel = "Mode \(index)"
         }
         return index
+    }
+
+    private func discoverModes() async -> [DeviceMode] {
+        var modes: [DeviceMode] = []
+        let maxIndex: UInt8
+        if let caps = try? await send(BmapCommands.queryCapabilities, expectOps: [.status]),
+           let packet = BmapPacket.decode(caps),
+           packet.payload.count >= 2 {
+            let bose = Int(packet.payload[0])
+            let user = Int(packet.payload[1])
+            maxIndex = UInt8(max(0, min(bose + user, 16) - 1))
+        } else {
+            maxIndex = 7
+        }
+
+        for index in 0...maxIndex {
+            if let name = try? await modeName(for: index), !name.isEmpty {
+                modes.append(DeviceMode(index: index, name: name))
+            }
+        }
+        return modes
+    }
+
+    private func modeName(for index: UInt8) async throws -> String {
+        let data = try await send(BmapCommands.queryModeConfig(index: index), expectOps: [.status])
+        guard let packet = BmapPacket.decode(data), packet.payload.count >= 7 else {
+            throw BoseError.emptyPayload
+        }
+        let end = min(38, packet.payload.count)
+        let nameBytes = packet.payload.subdata(in: 6..<end).prefix { $0 != 0 }
+        if let name = String(bytes: nameBytes, encoding: .utf8), !name.isEmpty {
+            return name
+        }
+        if packet.payload.count > 2 {
+            return Self.promptName(packet.payload[2])
+        }
+        return "Mode \(index)"
     }
 
     private static func promptName(_ id: UInt8) -> String {
         switch id {
         case 1: return "Quiet"
         case 2: return "Aware"
+        case 3, 4: return "Transparent"
         case 7: return "Commute"
         case 34: return "Immersion"
         case 36: return "Cinema"
-        default: return "Mod"
+        default: return "Mode"
         }
     }
 
-    // MARK: - Transport
+    // MARK: - Transport (raw BMAP on RFCOMM — no BLE 0x00 framing)
 
-    private func send(_ packet: BmapPacket, waitForReply: Bool = true) async throws -> BmapPacket {
-        guard phase == .ready, notifyReady, let peripheral, let writeCharacteristic else {
-            throw BoseError.notReady
-        }
+    private func send(_ packet: BmapPacket, expectOps: [BmapOperator]) async throws -> Data {
+        guard let channel else { throw BoseError.notReady }
+        let encoded = packet.encode()
+        log.info("TX \(encoded.map { String(format: "%02X", $0) }.joined(separator: " "))")
 
-        // Queue sends so segments never interleave.
-        return try await withCheckedThrowingContinuation { (outer: CheckedContinuation<BmapPacket, Error>) in
-            let previous = sendChain
-            sendChain = Task { @MainActor in
-                _ = await previous?.value
-                do {
-                    let result = try await self.performSend(packet, waitForReply: waitForReply, peripheral: peripheral, characteristic: writeCharacteristic)
-                    outer.resume(returning: result)
-                } catch {
-                    outer.resume(throwing: error)
+        let data: Data = try await withCheckedThrowingContinuation { cont in
+            if let old = pending {
+                old.resume(throwing: BoseError.superseded)
+            }
+            pending = cont
+            rxBuffer.removeAll()
+
+            var bytes = [UInt8](encoded)
+            let ok = bytes.withUnsafeMutableBufferPointer { buf -> Bool in
+                channel.writeSync(buf.baseAddress!, length: UInt16(buf.count)) == kIOReturnSuccess
+            }
+            if !ok {
+                pending = nil
+                cont.resume(throwing: BoseError.writeFailed)
+                return
+            }
+
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                if self.pending != nil {
+                    self.failPending(BoseError.timeout)
                 }
             }
         }
-    }
 
-    private func performSend(
-        _ packet: BmapPacket,
-        waitForReply: Bool,
-        peripheral: CBPeripheral,
-        characteristic: CBCharacteristic
-    ) async throws -> BmapPacket {
-        let key = UInt16(packet.block) << 8 | UInt16(packet.function)
-        let encoded = packet.encode()
-        let segments = BmapSegmenter.segment(encoded)
-        log.info("TX \(encoded.map { String(format: "%02X", $0) }.joined(separator: " ")) via \(characteristic.uuid.uuidString)")
-
-        if !waitForReply {
-            for segment in segments {
-                // bozo always uses WithoutResponse
-                peripheral.writeValue(segment, for: characteristic, type: .withoutResponse)
+        if let reply = BmapPacket.decode(data) {
+            if reply.op == BmapOperator.error.rawValue {
+                let code = reply.payload.first.map { String(format: "0x%02X", $0) } ?? "?"
+                throw BoseError.deviceError(code)
             }
-            return packet
-        }
-
-        return try await withCheckedThrowingContinuation { cont in
-            if let old = pendingByKey.removeValue(forKey: key) {
-                old.resume(throwing: BoseError.superseded)
-            }
-            pendingByKey[key] = cont
-            for segment in segments {
-                peripheral.writeValue(segment, for: characteristic, type: .withoutResponse)
-            }
-            Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 3_500_000_000)
-                await self?.failPending(key: key, error: BoseError.timeout)
+            if !expectOps.isEmpty {
+                let ops = Set(expectOps.map(\.rawValue))
+                if !ops.contains(reply.op) {
+                    log.warning("unexpected op \(reply.op), wanted \(expectOps.map(\.rawValue))")
+                }
             }
         }
+        return data
     }
 
-    private func failPending(key: UInt16, error: Error) {
-        if let cont = pendingByKey.removeValue(forKey: key) {
-            cont.resume(throwing: error)
+    private func failPending(_ error: Error) {
+        pending?.resume(throwing: error)
+        pending = nil
+    }
+
+    private func handleRX(_ bytes: [UInt8]) {
+        log.info("RX \(bytes.prefix(24).map { String(format: "%02X", $0) }.joined(separator: " "))")
+        let data = Data(bytes)
+
+        // Unsolicited mode STATUS
+        if let packet = BmapPacket.decode(data),
+           packet.block == BmapBlock.audioModes.rawValue,
+           packet.function == 0x03,
+           packet.op == BmapOperator.status.rawValue,
+           let idx = packet.payload.first {
+            state.modeIndex = idx
+            state.modeLabel = state.modes.first(where: { $0.index == idx })?.name ?? state.modeLabel
         }
-    }
 
-    private func handleIncoming(_ data: Data) {
-        guard let assembled = reassembler.push(data) else { return }
-        log.info("RX \(assembled.map { String(format: "%02X", $0) }.joined(separator: " "))")
-
-        // Device may concatenate multiple BMAP packets in one reassembly.
-        var offset = 0
-        while offset + 4 <= assembled.count {
-            let length = Int(assembled[offset + 3])
-            let end = offset + 4 + length
-            guard end <= assembled.count,
-                  let packet = BmapPacket.decode(assembled.subdata(in: offset..<end)) else { break }
-            offset = end
-            deliver(packet)
+        guard pending != nil else { return }
+        // Accept first parseable BMAP reply for the waiter (ANChor style).
+        if BmapPacket.decode(data) != nil {
+            let cont = pending
+            pending = nil
+            cont?.resume(returning: data)
         }
-    }
-
-    private func deliver(_ packet: BmapPacket) {
-        let key = UInt16(packet.block) << 8 | UInt16(packet.function)
-        switch packet.op {
-        case BmapOperator.error.rawValue:
-            let code = packet.payload.first.map { String(format: "0x%02X", $0) } ?? "?"
-            pendingByKey.removeValue(forKey: key)?.resume(throwing: BoseError.deviceError(code))
-        case BmapOperator.status.rawValue, BmapOperator.result.rawValue:
-            if let cont = pendingByKey.removeValue(forKey: key) {
-                cont.resume(returning: packet)
-            } else if pendingByKey.count == 1, let onlyKey = pendingByKey.keys.first,
-                      let cont = pendingByKey.removeValue(forKey: onlyKey) {
-                // Some firmwares reply under a neighboring function id.
-                cont.resume(returning: packet)
-            }
-        case BmapOperator.processing.rawValue:
-            break
-        default:
-            break
-        }
-    }
-
-    private func resetConnection(message: String) {
-        writeCharacteristic = nil
-        peripheral = nil
-        notifyReady = false
-        didBroadServiceScan = false
-        reassembler.reset()
-        for (_, cont) in pendingByKey { cont.resume(throwing: BoseError.disconnected) }
-        pendingByKey.removeAll()
-        phase = .idle
-        statusMessage = message
-    }
-
-    private func pickCharacteristic(from chars: [CBCharacteristic]) -> CBCharacteristic? {
-        chars.first(where: { $0.uuid == BoseBLE.unsecure })
-            ?? chars.first(where: { $0.uuid == BoseBLE.secure })
-            ?? chars.first
     }
 }
 
@@ -324,6 +397,9 @@ enum BoseError: LocalizedError {
     case emptyPayload
     case superseded
     case disconnected
+    case connectFailed
+    case writeFailed
+    case rfcommFailed(IOReturn)
     case deviceError(String)
 
     var errorDescription: String? {
@@ -333,176 +409,28 @@ enum BoseError: LocalizedError {
         case .emptyPayload: return "Empty response"
         case .superseded: return "Request cancelled"
         case .disconnected: return "Disconnected"
+        case .connectFailed: return "Bluetooth connect failed"
+        case .writeFailed: return "RFCOMM write failed"
+        case .rfcommFailed(let code): return "RFCOMM open failed (\(code))"
         case .deviceError(let code): return "Device error \(code)"
         }
     }
 }
 
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
-    }
-}
-
-extension BoseBluetoothClient: CBCentralManagerDelegate {
-    nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
+extension BoseBluetoothClient: IOBluetoothRFCOMMChannelDelegate {
+    nonisolated func rfcommChannelData(_ rfcommChannel: IOBluetoothRFCOMMChannel!, data dataPointer: UnsafeMutableRawPointer!, length dataLength: Int) {
+        let bytes = Array(UnsafeBufferPointer(start: dataPointer.assumingMemoryBound(to: UInt8.self), count: dataLength))
         Task { @MainActor in
-            switch central.state {
-            case .poweredOn:
-                if phase == .poweredOff || phase == .idle { phase = .idle }
-                statusMessage = "Bluetooth on"
-            case .poweredOff:
-                phase = .poweredOff
-                statusMessage = "Bluetooth off"
-            case .unauthorized:
-                phase = .unauthorized
-                statusMessage = "Bluetooth permission needed"
-            default:
-                statusMessage = "Bluetooth not ready"
-            }
+            self.handleRX(bytes)
         }
     }
 
-    nonisolated func centralManager(
-        _ central: CBCentralManager,
-        didDiscover peripheral: CBPeripheral,
-        advertisementData: [String: Any],
-        rssi RSSI: NSNumber
-    ) {
+    nonisolated func rfcommChannelClosed(_ rfcommChannel: IOBluetoothRFCOMMChannel!) {
         Task { @MainActor in
-            let advertised = (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
-                ?? peripheral.name
-                ?? ""
-            let services = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
-            let hasBmap = services.contains(BoseBLE.service)
-            let lower = advertised.lowercased()
-            let nameMatch = BoseBLE.nameHints.contains { lower.contains($0) }
-            guard hasBmap || nameMatch else { return }
-
-            knownPeripherals[peripheral.identifier] = peripheral
-            let item = DiscoveredHeadphone(
-                peripheralID: peripheral.identifier,
-                name: advertised.isEmpty ? "Bose" : advertised,
-                rssi: RSSI.intValue
-            )
-            if let idx = discovered.firstIndex(where: { $0.peripheralID == peripheral.identifier }) {
-                discovered[idx] = item
-            } else {
-                discovered.append(item)
-            }
-            statusMessage = "\(discovered.count) found"
-        }
-    }
-
-    nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        Task { @MainActor in
-            phase = .discovering
-            statusMessage = "Discovering…"
-            peripheral.discoverServices([BoseBLE.service])
-        }
-    }
-
-    nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        Task { @MainActor in
-            phase = .failed
-            statusMessage = error?.localizedDescription ?? "Connect failed"
-        }
-    }
-
-    nonisolated func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        Task { @MainActor in
-            resetConnection(message: error?.localizedDescription ?? "Disconnected")
-        }
-    }
-}
-
-extension BoseBluetoothClient: CBPeripheralDelegate {
-    nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        Task { @MainActor in
-            if let error {
-                phase = .failed
-                statusMessage = error.localizedDescription
-                return
-            }
-            if let service = peripheral.services?.first(where: { $0.uuid == BoseBLE.service }) {
-                peripheral.discoverCharacteristics([BoseBLE.unsecure, BoseBLE.secure], for: service)
-                return
-            }
-            if !didBroadServiceScan {
-                didBroadServiceScan = true
-                peripheral.discoverServices(nil)
-                return
-            }
-            phase = .failed
-            statusMessage = "No BMAP service (FEBE)"
-        }
-    }
-
-    nonisolated func peripheral(
-        _ peripheral: CBPeripheral,
-        didDiscoverCharacteristicsFor service: CBService,
-        error: Error?
-    ) {
-        Task { @MainActor in
-            if let error {
-                phase = .failed
-                statusMessage = error.localizedDescription
-                return
-            }
-            guard let chosen = pickCharacteristic(from: service.characteristics ?? []) else {
-                phase = .failed
-                statusMessage = "No BMAP characteristic"
-                return
-            }
-            writeCharacteristic = chosen
-            statusMessage = "Enabling notify…"
-            if chosen.properties.contains(.notify) || chosen.properties.contains(.indicate) {
-                peripheral.setNotifyValue(true, for: chosen)
-            } else {
-                notifyReady = true
-                phase = .ready
-                statusMessage = "Connected"
-                Task { await refresh() }
-            }
-        }
-    }
-
-    nonisolated func peripheral(
-        _ peripheral: CBPeripheral,
-        didUpdateNotificationStateFor characteristic: CBCharacteristic,
-        error: Error?
-    ) {
-        Task { @MainActor in
-            if let error {
-                phase = .failed
-                statusMessage = "Notify: \(error.localizedDescription)"
-                return
-            }
-            guard characteristic.isNotifying else {
-                phase = .failed
-                statusMessage = "Notify failed"
-                return
-            }
-            notifyReady = true
-            phase = .ready
-            statusMessage = "Connected"
-            log.info("notify OK on \(characteristic.uuid.uuidString)")
-            Task { await refresh() }
-        }
-    }
-
-    nonisolated func peripheral(
-        _ peripheral: CBPeripheral,
-        didUpdateValueFor characteristic: CBCharacteristic,
-        error: Error?
-    ) {
-        Task { @MainActor in
-            if let error {
-                state.lastError = error.localizedDescription
-                return
-            }
-            guard let value = characteristic.value else { return }
-            handleIncoming(value)
+            self.channel = nil
+            self.failPending(BoseError.disconnected)
+            self.phase = .idle
+            self.statusMessage = "Disconnected"
         }
     }
 }
