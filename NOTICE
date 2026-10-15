@@ -1,0 +1,23 @@
+ModeBar
+=======
+
+Copyright (c) 2026 Şafak Kızkın and ModeBar contributors.
+Licensed under the MIT License (see LICENSE).
+
+This project is an independent, unofficial tool. It is not affiliated with,
+endorsed by, or sponsored by Bose Corporation. Bose, QuietComfort, and related
+marks are trademarks of their respective owners.
+
+Protocol context
+----------------
+
+ModeBar speaks the reverse-engineered Bose Message Access Protocol (BMAP) over
+Classic Bluetooth RFCOMM. Understanding of BMAP packet layout and function
+blocks drew on public open-source work, including:
+
+- ANChor — https://github.com/JimmyCalhoun/ANChor
+- bosectl — https://github.com/aaronsb/bosectl
+- bozo — https://github.com/NerdySouth/bozo
+
+Those projects retain their own licenses; ModeBar does not vendor their source.
+See docs/protocol.md for what this app implements.

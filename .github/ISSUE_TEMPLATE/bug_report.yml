@@ -1,0 +1,46 @@
+name: Bug report
+description: Something does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. ModeBar is unofficial and not affiliated with Bose.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Expected vs actual behaviour
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ModeBar version
+      placeholder: "0.1.0 or commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "15.x"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Headphones
+      description: Name shown in System Settings and product id if known (e.g. 0x4075)
+      placeholder: "Dark Star / 0x4075"
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Redact personal data. Console / ModeBar status text is enough.

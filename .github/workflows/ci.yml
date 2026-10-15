@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build Debug
+        run: |
+          xcodebuild \
+            -project ModeBar/ModeBar.xcodeproj \
+            -scheme ModeBar \
+            -configuration Debug \
+            -derivedDataPath .derived \
+            CODE_SIGN_IDENTITY="-" \
+            build
+
+      - name: Build Release package
+        run: ./scripts/package.sh 0.0.0-ci

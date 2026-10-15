@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish zip
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Package
+        id: pkg
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ./scripts/package.sh "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(cut -d' ' -f1 "dist/ModeBar-${VERSION}.zip.sha256")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ModeBar-*.zip
+            dist/ModeBar-*.zip.sha256
+          generate_release_notes: true
+          body: |
+            Unsigned ad-hoc build. After download:
+
+            ```bash
+            xattr -dr com.apple.quarantine /Applications/ModeBar.app
+            ```
+
+            Homebrew cask `sha256` for this tag: `${{ steps.pkg.outputs.sha256 }}`
+            Update `Casks/modebar.rb` version + sha256 in a follow-up commit if needed.

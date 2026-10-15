@@ -1,12 +1,12 @@
 cask "modebar" do
   version "0.1.0"
-  # Replace HOMEPAGE_OWNER/REPO after publishing a public GitHub release of ModeBar-0.1.0.zip
+  # Fill sha256 from `./scripts/package.sh #{version}` after the first GitHub Release.
   sha256 "REPLACE_WITH_SHA256_FROM_scripts_package_sh"
 
-  url "https://github.com/HOMEPAGE_OWNER/modebar/releases/download/v#{version}/ModeBar-#{version}.zip"
+  url "https://github.com/safakkizkin/modebar/releases/download/v#{version}/ModeBar-#{version}.zip"
   name "ModeBar"
   desc "Menu bar controller for QuietComfort-class headphones (BMAP over RFCOMM)"
-  homepage "https://github.com/HOMEPAGE_OWNER/modebar"
+  homepage "https://github.com/safakkizkin/modebar"
 
   depends_on macos: ">= :sonoma"
 
