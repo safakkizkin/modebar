@@ -71,22 +71,32 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
         statusMessage = "Stopped"
     }
 
-    /// Prefer already-connected Bose; otherwise first paired match.
+    /// Prefer already-connected Bose in System Settings; otherwise first paired match.
     func connectPreferred() {
+        guard phase != .connecting, phase != .ready else { return }
         startScan()
-        if let connected = discovered.first(where: \.isConnected) ?? discovered.first {
-            connect(to: connected)
+        guard let target = discovered.first(where: \.isConnected) ?? discovered.first else {
+            statusMessage = "No paired Bose headphones"
+            phase = .idle
+            return
         }
+        let label = target.isConnected ? "Opening \(target.name)…" : "Connecting \(target.name)…"
+        connect(to: target, status: label)
     }
 
-    func connect(to item: DiscoveredHeadphone) {
+    func connect(to item: DiscoveredHeadphone, status: String? = nil) {
         guard let dev = IOBluetoothDevice(addressString: item.address) else {
             statusMessage = "Device address invalid"
             phase = .failed
             return
         }
+        // Already holding RFCOMM on this address.
+        if phase == .ready, device?.addressString?.uppercased() == item.address.uppercased() {
+            Task { await refresh() }
+            return
+        }
         phase = .connecting
-        statusMessage = "Connecting…"
+        statusMessage = status ?? "Opening \(item.name)…"
         state = LiveHeadphoneState(name: item.name)
         device = dev
 
@@ -94,12 +104,14 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
             do {
                 try await openRFCOMM(to: dev)
                 phase = .ready
-                statusMessage = "Connected"
+                statusMessage = "Ready"
                 await refresh()
             } catch {
                 phase = .failed
                 statusMessage = error.localizedDescription
                 state.lastError = error.localizedDescription
+                // Keep discovered list so the user can retry without another Find.
+                discovered = Self.pairedBoseDevices()
             }
         }
     }

@@ -8,7 +8,11 @@ struct BoseQCApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(ble)
+                .task {
+                    // Headphones already linked in System Settings → open RFCOMM immediately.
+                    ble.connectPreferred()
+                }
         }
-        .defaultSize(width: 460, height: 600)
+        .defaultSize(width: 420, height: 480)
     }
 }
