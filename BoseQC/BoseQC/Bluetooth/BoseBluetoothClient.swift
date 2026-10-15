@@ -100,7 +100,7 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
 
         Task { @MainActor in
             do {
-                try await worker.open(address: item.address, name: item.name, timeout: 8)
+                try await worker.open(address: item.address, name: item.name, timeout: 20)
                 phase = .ready
                 statusMessage = "Ready"
                 await refresh()
@@ -297,6 +297,9 @@ private final class RFCOMMWorker: NSObject, IOBluetoothRFCOMMChannelDelegate {
     private var openCont: CheckedContinuation<Void, Error>?
     private let openLock = NSLock()
 
+    /// QuietComfort Headphones (prince / 0x4075) use channel 8; Ultra uses 2. Probe like bosectl.
+    private static let fallbackChannels: [BluetoothRFCOMMChannelID] = [8, 2, 9]
+
     override init() {
         super.init()
         let boot = ready
@@ -309,6 +312,8 @@ private final class RFCOMMWorker: NSObject, IOBluetoothRFCOMMChannelDelegate {
             RunLoop.current.run()
         }
         thread.name = "BoseQC-RFCOMM"
+        // Match UI QoS so init's ready.wait() is not a priority inversion.
+        thread.qualityOfService = .userInteractive
         thread.start()
         ready.wait()
     }
@@ -321,6 +326,7 @@ private final class RFCOMMWorker: NSObject, IOBluetoothRFCOMMChannelDelegate {
             openLock.unlock()
             perform(#selector(doOpen(_:)), on: thread, with: ["address": address, "name": name] as NSDictionary, waitUntilDone: false)
 
+            // prince channel probing can take a few seconds per channel
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [weak self] in
                 guard let self else { return }
                 guard self.finishOpen(.failure(BoseError.timeout)) else { return }
@@ -365,21 +371,59 @@ private final class RFCOMMWorker: NSObject, IOBluetoothRFCOMMChannelDelegate {
             }
         }
 
-        var chan: IOBluetoothRFCOMMChannel?
-        let result = device.openRFCOMMChannelSync(&chan, withChannelID: 2, delegate: self)
-        log.info("RFCOMM result=\(result)")
-        if result == kIOReturnSuccess, let chan {
-            channel = chan
-            // Drain boot chatter.
-            let drainEnd = Date().addingTimeInterval(0.5)
-            while Date() < drainEnd {
-                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        var lastError: IOReturn = kIOReturnError
+        for cid in Self.fallbackChannels {
+            var chan: IOBluetoothRFCOMMChannel?
+            log.info("Trying RFCOMM channel \(cid)")
+            let result = device.openRFCOMMChannelSync(&chan, withChannelID: cid, delegate: self)
+            log.info("RFCOMM ch\(cid) result=\(result)")
+            lastError = result
+            if result == kIOReturnSuccess, let chan {
+                channel = chan
+                // Drain boot chatter.
+                let drainEnd = Date().addingTimeInterval(0.4)
+                while Date() < drainEnd {
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+                }
+                // Confirm BMAP with a cheap battery GET (bosectl probes this way).
+                if self.smokeTestBMAP() {
+                    log.info("BMAP OK on channel \(cid)")
+                    finishOpen(.success(()))
+                    return
+                }
+                log.info("Channel \(cid) opened but not BMAP — closing")
+                _ = chan.close()
+                channel = nil
             }
-            finishOpen(.success(()))
-        } else {
-            finishOpen(.failure(BoseError.rfcommFailed(result)))
         }
+        finishOpen(.failure(BoseError.rfcommFailed(lastError)))
     }
+
+    /// Send battery GET; true if we get any BMAP reply quickly.
+    private func smokeTestBMAP() -> Bool {
+        guard let channel else { return false }
+        let packet = BmapCommands.queryBattery.encode()
+        var bytes = [UInt8](packet)
+        let ok = bytes.withUnsafeMutableBufferPointer { buf in
+            channel.writeSync(buf.baseAddress!, length: UInt16(buf.count)) == kIOReturnSuccess
+        }
+        guard ok else { return false }
+
+        var got = false
+        let box = SmokeFlag()
+        // Temporarily listen via existing delegate path using a short RunLoop spin.
+        // Delegate will set smokeFlag if any packet arrives.
+        smokeFlag = box
+        let deadline = Date().addingTimeInterval(1.2)
+        while Date() < deadline, !box.hit {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        smokeFlag = nil
+        got = box.hit
+        return got
+    }
+
+    private var smokeFlag: SmokeFlag?
 
     @objc private func doClose() {
         _ = channel?.close()
@@ -426,9 +470,12 @@ private final class RFCOMMWorker: NSObject, IOBluetoothRFCOMMChannelDelegate {
         let bytes = Array(UnsafeBufferPointer(start: dataPointer.assumingMemoryBound(to: UInt8.self), count: dataLength))
         log.info("RX \(bytes.prefix(24).map { String(format: "%02X", $0) }.joined(separator: " "))")
         let data = Data(bytes)
-        guard BmapPacket.decode(data) != nil, let box = activeBox else { return }
-        activeBox = nil
-        _ = box.finish(.success(data))
+        smokeFlag?.hit = true
+        guard BmapPacket.decode(data) != nil else { return }
+        if let box = activeBox {
+            activeBox = nil
+            _ = box.finish(.success(data))
+        }
     }
 
     func rfcommChannelClosed(_ rfcommChannel: IOBluetoothRFCOMMChannel!) {
@@ -441,6 +488,10 @@ private final class RFCOMMWorker: NSObject, IOBluetoothRFCOMMChannelDelegate {
         _ = finishOpen(.failure(BoseError.disconnected))
         onClosed?()
     }
+}
+
+private final class SmokeFlag: NSObject {
+    var hit = false
 }
 
 /// NSObject box so we can `perform(_:on:with:)` an async continuation + payload.
@@ -487,7 +538,7 @@ enum BoseError: LocalizedError {
         case .disconnected: return "Disconnected"
         case .connectFailed: return "Bluetooth link failed"
         case .writeFailed: return "Write failed"
-        case .rfcommFailed(let code): return "RFCOMM failed (\(code)) — disconnect/reconnect headphones in System Settings"
+        case .rfcommFailed(let code): return "RFCOMM failed (\(code)). For QuietComfort try disconnect/reconnect in System Settings, then Retry."
         case .deviceError(let code): return "Device error \(code)"
         }
     }
