@@ -1,8 +1,8 @@
 import SwiftUI
 
 @main
-struct BoseQCApp: App {
-    @StateObject private var session = BoseBluetoothClient()
+struct ModeBarApp: App {
+    @StateObject private var session = HeadphoneSession()
 
     var body: some Scene {
         MenuBarExtra {

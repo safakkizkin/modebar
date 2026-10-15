@@ -1,5 +1,7 @@
 .derived/
+.derived-release/
 .build/
+dist/
 *.xcuserstate
 xcuserdata/
 DerivedData/

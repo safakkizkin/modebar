@@ -1,27 +1,58 @@
-# BoseQC
+# ModeBar
 
-Menu bar controller for Bose QuietComfort headphones.
+Menu bar controller for QuietComfort-class headphones.
 
-Talks **BMAP over Classic Bluetooth RFCOMM** (channel 8 for QuietComfort Headphones / `prince`, 2 for Ultra — probes `8 → 2 → 9`), same idea as [bosectl](https://github.com/aaronsb/bosectl) and [ANChor](https://github.com/JimmyCalhoun/ANChor).
+Talks **BMAP over Classic Bluetooth RFCOMM** (probes channels `8 → 2 → 9`), same idea as [bosectl](https://github.com/aaronsb/bosectl) and [ANChor](https://github.com/JimmyCalhoun/ANChor).
 
-No dock icon — lives in the macOS menu bar.
+No Dock icon — lives in the macOS menu bar. Not affiliated with Bose Corporation.
 
 ## Features
 
-- Auto-connects to the System Settings–connected Bose device on launch
+- Auto-connects to the System Settings–paired compatible headphones on launch
 - Battery % in the menu bar title when connected
-- Mode list loaded from the headphones; tap to switch
-- Live sync every 2s + unsolicited updates (phone / on-ear changes)
+- Mode list loaded from the device; tap to switch
+- Live sync every 2s + unsolicited updates (phone app / on-ear changes)
 
-## Run
+## Supported devices
+
+**Not all Bose products.** ModeBar speaks BMAP/RFCOMM. Verified locally on QuietComfort Headphones (`prince`, product id `0x4075`, names like Dark Star / Onyx Star). The same channel probe often works on other QuietComfort / Ultra / Earbuds models that bosectl lists, but speakers, soundbars, and non-BMAP gear are out of scope.
+
+## Install (Homebrew)
+
+After the first GitHub Release of `ModeBar-0.1.0.zip` exists on a public repo that contains this tap:
 
 ```bash
-cd BoseQC
-xcodebuild -scheme BoseQC -configuration Debug -derivedDataPath ../.derived build
-open ../.derived/Build/Products/Debug/BoseQC.app
+brew tap <owner>/modebar
+brew install --cask modebar
 ```
 
-Look for the headphones icon in the menu bar (top right). Quit from the menu.
+Or install the cask from a local checkout:
+
+```bash
+brew install --cask ./Casks/modebar.rb
+```
+
+Update `url`, `homepage`, and `sha256` in `Casks/modebar.rb` from `scripts/package.sh` output before publishing.
+
+Unsigned builds may need:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/ModeBar.app
+```
+
+Apple notarization (Developer ID) is recommended before wider Homebrew distribution. Mac App Store is a poor fit: RFCOMM needs the sandbox off.
+
+## Build from source
+
+```bash
+./scripts/package.sh 0.1.0
+# or debug:
+cd ModeBar
+xcodebuild -scheme ModeBar -configuration Debug -derivedDataPath ../.derived build
+open ../.derived/Build/Products/Debug/ModeBar.app
+```
+
+Look for the headphones icon in the menu bar. Quit from the menu.
 
 ## Notes
 

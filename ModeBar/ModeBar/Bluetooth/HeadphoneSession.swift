@@ -3,7 +3,7 @@ import IOBluetooth
 import Combine
 import os.log
 
-private let log = Logger(subsystem: "app.boseqc.macos", category: "rfcomm")
+private let log = Logger(subsystem: "app.modebar.macos", category: "rfcomm")
 
 enum ConnectionPhase: String, Equatable {
     case idle
@@ -37,7 +37,7 @@ struct LiveHeadphoneState: Equatable {
 
 /// RFCOMM + BMAP on a dedicated thread (ANChor pattern). Main-thread sync opens hang forever.
 @MainActor
-final class BoseBluetoothClient: NSObject, ObservableObject {
+final class HeadphoneSession: NSObject, ObservableObject {
     @Published private(set) var phase: ConnectionPhase = .idle
     @Published private(set) var discovered: [DiscoveredHeadphone] = []
     @Published private(set) var state = LiveHeadphoneState()
@@ -63,7 +63,7 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
                 }
             }
         }
-        // Bose Music (phone) changes arrive as unsolicited STATUS on RFCOMM.
+        // Phone app changes arrive as unsolicited STATUS on RFCOMM.
         worker.onUnsolicited = { [weak self] packet in
             Task { @MainActor in
                 self?.applyUnsolicited(packet)
@@ -73,11 +73,11 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
 
     func startScan() {
         phase = .scanning
-        statusMessage = "Looking for paired Bose…"
+        statusMessage = "Looking for paired headphones…"
         discovered = Self.pairedBoseDevices()
         phase = .idle
         if discovered.isEmpty {
-            statusMessage = "No paired Bose headphones — pair in System Settings first"
+            statusMessage = "No paired headphones — pair in System Settings first"
         } else {
             statusMessage = "\(discovered.count) device(s)"
         }
@@ -92,7 +92,7 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
         guard phase != .connecting, phase != .ready else { return }
         startScan()
         guard let target = discovered.first(where: \.isConnected) ?? discovered.first else {
-            statusMessage = "No paired Bose headphones"
+            statusMessage = "No paired headphones"
             phase = .idle
             return
         }
@@ -365,7 +365,7 @@ private final class RFCOMMWorker: NSObject, IOBluetoothRFCOMMChannelDelegate {
             boot.signal()
             RunLoop.current.run()
         }
-        thread.name = "BoseQC-RFCOMM"
+        thread.name = "ModeBar-RFCOMM"
         // Match UI QoS so init's ready.wait() is not a priority inversion.
         thread.qualityOfService = .userInteractive
         thread.start()

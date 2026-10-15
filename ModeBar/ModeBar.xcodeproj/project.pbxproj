@@ -7,23 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B10000000000000000000001 /* BoseQCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* BoseQCApp.swift */; };
+		B10000000000000000000001 /* ModeBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* ModeBarApp.swift */; };
 		B10000000000000000000002 /* BmapPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* BmapPacket.swift */; };
-		B10000000000000000000003 /* BoseBluetoothClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* BoseBluetoothClient.swift */; };
+		B10000000000000000000003 /* HeadphoneSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* HeadphoneSession.swift */; };
 		B10000000000000000000004 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* MenuBarView.swift */; };
 		B10000000000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* Assets.xcassets */; };
 		B10000000000000000000006 /* IOBluetooth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* IOBluetooth.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		B30000000000000000000001 /* BoseQC.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BoseQC.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B20000000000000000000001 /* BoseQCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoseQCApp.swift; sourceTree = "<group>"; };
+		B30000000000000000000001 /* ModeBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ModeBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000001 /* ModeBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeBarApp.swift; sourceTree = "<group>"; };
 		B20000000000000000000002 /* BmapPacket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BmapPacket.swift; sourceTree = "<group>"; };
-		B20000000000000000000003 /* BoseBluetoothClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoseBluetoothClient.swift; sourceTree = "<group>"; };
+		B20000000000000000000003 /* HeadphoneSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadphoneSession.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		B20000000000000000000005 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B20000000000000000000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		B20000000000000000000007 /* BoseQC.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BoseQC.entitlements; sourceTree = "<group>"; };
+		B20000000000000000000007 /* ModeBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ModeBar.entitlements; sourceTree = "<group>"; };
 		B20000000000000000000008 /* IOBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOBluetooth.framework; path = System/Library/Frameworks/IOBluetooth.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -42,7 +42,7 @@
 		B50000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				B50000000000000000000002 /* BoseQC */,
+				B50000000000000000000002 /* ModeBar */,
 				B50000000000000000000003 /* Products */,
 				B50000000000000000000008 /* Frameworks */,
 			);
@@ -56,24 +56,24 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		B50000000000000000000002 /* BoseQC */ = {
+		B50000000000000000000002 /* ModeBar */ = {
 			isa = PBXGroup;
 			children = (
-				B20000000000000000000001 /* BoseQCApp.swift */,
+				B20000000000000000000001 /* ModeBarApp.swift */,
 				B50000000000000000000004 /* BMAP */,
 				B50000000000000000000005 /* Bluetooth */,
 				B50000000000000000000006 /* UI */,
 				B20000000000000000000005 /* Assets.xcassets */,
 				B20000000000000000000006 /* Info.plist */,
-				B20000000000000000000007 /* BoseQC.entitlements */,
+				B20000000000000000000007 /* ModeBar.entitlements */,
 			);
-			path = BoseQC;
+			path = ModeBar;
 			sourceTree = "<group>";
 		};
 		B50000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B30000000000000000000001 /* BoseQC.app */,
+				B30000000000000000000001 /* ModeBar.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -89,7 +89,7 @@
 		B50000000000000000000005 /* Bluetooth */ = {
 			isa = PBXGroup;
 			children = (
-				B20000000000000000000003 /* BoseBluetoothClient.swift */,
+				B20000000000000000000003 /* HeadphoneSession.swift */,
 			);
 			path = Bluetooth;
 			sourceTree = "<group>";
@@ -105,9 +105,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B60000000000000000000001 /* BoseQC */ = {
+		B60000000000000000000001 /* ModeBar */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B80000000000000000000003 /* Build configuration list for PBXNativeTarget "BoseQC" */;
+			buildConfigurationList = B80000000000000000000003 /* Build configuration list for PBXNativeTarget "ModeBar" */;
 			buildPhases = (
 				B70000000000000000000001 /* Sources */,
 				B40000000000000000000001 /* Frameworks */,
@@ -117,9 +117,9 @@
 			);
 			dependencies = (
 			);
-			name = BoseQC;
-			productName = BoseQC;
-			productReference = B30000000000000000000001 /* BoseQC.app */;
+			name = ModeBar;
+			productName = ModeBar;
+			productReference = B30000000000000000000001 /* ModeBar.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -137,7 +137,7 @@
 					};
 				};
 			};
-			buildConfigurationList = B80000000000000000000001 /* Build configuration list for PBXProject "BoseQC" */;
+			buildConfigurationList = B80000000000000000000001 /* Build configuration list for PBXProject "ModeBar" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -150,7 +150,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				B60000000000000000000001 /* BoseQC */,
+				B60000000000000000000001 /* ModeBar */,
 			);
 		};
 /* End PBXProject section */
@@ -171,9 +171,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B10000000000000000000001 /* BoseQCApp.swift in Sources */,
+				B10000000000000000000001 /* ModeBarApp.swift in Sources */,
 				B10000000000000000000002 /* BmapPacket.swift in Sources */,
-				B10000000000000000000003 /* BoseBluetoothClient.swift in Sources */,
+				B10000000000000000000003 /* HeadphoneSession.swift in Sources */,
 				B10000000000000000000004 /* MenuBarView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -218,21 +218,21 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = BoseQC/BoseQC.entitlements;
+				CODE_SIGN_ENTITLEMENTS = ModeBar/ModeBar.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = BoseQC/Info.plist;
+				INFOPLIST_FILE = ModeBar/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.boseqc.macos;
+				PRODUCT_BUNDLE_IDENTIFIER = app.modebar.macos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 			};
@@ -242,21 +242,21 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = BoseQC/BoseQC.entitlements;
+				CODE_SIGN_ENTITLEMENTS = ModeBar/ModeBar.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = BoseQC/Info.plist;
+				INFOPLIST_FILE = ModeBar/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.boseqc.macos;
+				PRODUCT_BUNDLE_IDENTIFIER = app.modebar.macos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 			};
@@ -265,7 +265,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B80000000000000000000001 /* Build configuration list for PBXProject "BoseQC" */ = {
+		B80000000000000000000001 /* Build configuration list for PBXProject "ModeBar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BA0000000000000000000001 /* Debug */,
@@ -274,7 +274,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B80000000000000000000003 /* Build configuration list for PBXNativeTarget "BoseQC" */ = {
+		B80000000000000000000003 /* Build configuration list for PBXNativeTarget "ModeBar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BA0000000000000000000003 /* Debug */,

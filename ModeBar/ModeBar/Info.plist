@@ -27,6 +27,6 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>BoseQC uses Bluetooth to control QuietComfort headphones over RFCOMM.</string>
+	<string>ModeBar uses Bluetooth to read battery and switch noise modes on compatible headphones.</string>
 </dict>
 </plist>

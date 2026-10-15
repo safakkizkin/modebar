@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 struct MenuBarView: View {
-    @EnvironmentObject private var session: BoseBluetoothClient
+    @EnvironmentObject private var session: HeadphoneSession
 
     var body: some View {
         Group {
@@ -62,7 +62,7 @@ struct MenuBarView: View {
 
             Divider()
 
-            Button("Quit BoseQC") {
+            Button("Quit ModeBar") {
                 session.disconnect()
                 NSApplication.shared.terminate(nil)
             }
@@ -74,6 +74,6 @@ struct MenuBarView: View {
     }
 
     private var headerTitle: String {
-        session.phase == .ready ? session.state.name : "BoseQC"
+        session.phase == .ready ? session.state.name : "ModeBar"
     }
 }
