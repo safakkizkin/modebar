@@ -11,6 +11,7 @@
 		B10000000000000000000002 /* BmapPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* BmapPacket.swift */; };
 		B10000000000000000000003 /* HeadphoneSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* HeadphoneSession.swift */; };
 		B10000000000000000000004 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* MenuBarView.swift */; };
+		B10000000000000000000007 /* ModeBarMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000009 /* ModeBarMark.swift */; };
 		B10000000000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* Assets.xcassets */; };
 		B10000000000000000000006 /* IOBluetooth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* IOBluetooth.framework */; };
 /* End PBXBuildFile section */
@@ -21,6 +22,7 @@
 		B20000000000000000000002 /* BmapPacket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BmapPacket.swift; sourceTree = "<group>"; };
 		B20000000000000000000003 /* HeadphoneSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadphoneSession.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		B20000000000000000000009 /* ModeBarMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeBarMark.swift; sourceTree = "<group>"; };
 		B20000000000000000000005 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B20000000000000000000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B20000000000000000000007 /* ModeBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ModeBar.entitlements; sourceTree = "<group>"; };
@@ -98,6 +100,7 @@
 			isa = PBXGroup;
 			children = (
 				B20000000000000000000004 /* MenuBarView.swift */,
+				B20000000000000000000009 /* ModeBarMark.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -175,6 +178,7 @@
 				B10000000000000000000002 /* BmapPacket.swift in Sources */,
 				B10000000000000000000003 /* HeadphoneSession.swift in Sources */,
 				B10000000000000000000004 /* MenuBarView.swift in Sources */,
+				B10000000000000000000007 /* ModeBarMark.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

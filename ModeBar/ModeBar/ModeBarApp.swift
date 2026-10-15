@@ -9,29 +9,20 @@ struct ModeBarApp: App {
             MenuBarView()
                 .environmentObject(session)
         } label: {
-            Label {
-                Text(menuBarTitle)
-            } icon: {
-                Image(systemName: menuBarSymbol)
+            HStack(spacing: 4) {
+                ModeBarMarkLabel(dimmed: session.phase != .ready && session.phase != .connecting)
+                if !menuBarTitle.isEmpty {
+                    Text(menuBarTitle)
+                }
             }
         }
         .menuBarExtraStyle(.menu)
-    }
-
-    private var menuBarSymbol: String {
-        if session.phase == .ready {
-            return "headphones"
-        }
-        if session.phase == .connecting {
-            return "headphones"
-        }
-        return "headphones.slash"
     }
 
     private var menuBarTitle: String {
         guard session.phase == .ready, let battery = session.state.batteryPercent else {
             return ""
         }
-        return " \(battery)%"
+        return "\(battery)%"
     }
 }
