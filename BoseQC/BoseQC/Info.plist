@@ -24,7 +24,9 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>LSUIElement</key>
+	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>BoseQC uses Bluetooth to discover and control QuietComfort headphones when a live device session is enabled.</string>
+	<string>BoseQC uses Bluetooth to control QuietComfort headphones over RFCOMM.</string>
 </dict>
 </plist>

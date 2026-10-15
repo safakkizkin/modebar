@@ -1,30 +1,19 @@
 # BoseQC
 
-Simple macOS controller for Bose QuietComfort headphones.
+Menu bar controller for Bose QuietComfort headphones.
 
-Talks **BMAP over Classic Bluetooth RFCOMM channel 2** — the same path as [bosectl](https://github.com/aaronsb/bosectl) and [ANChor](https://github.com/JimmyCalhoun/ANChor). Not a Bose Music UI clone; not BLE GATT.
+Talks **BMAP over Classic Bluetooth RFCOMM** (channel 8 for QuietComfort Headphones / `prince`, 2 for Ultra — probes `8 → 2 → 9`), same idea as [bosectl](https://github.com/aaronsb/bosectl) and [ANChor](https://github.com/JimmyCalhoun/ANChor).
+
+No dock icon — lives in the macOS menu bar.
 
 ## Features
 
-- Finds paired Bose headphones (one row per address — no duplicate LE-/classic entries)
-- Connects over RFCOMM
-- Reads battery + current mode
-- Loads mode list **from the device** (AudioModes config), then switches modes
-
-## Requirements
-
-- macOS 14+
-- Headphones already paired in System Settings → Bluetooth  
-  On this Mac: **Dark Star** / **Onyx Star** (QuietComfort, product `0x4075`)
+- Auto-connects to the System Settings–connected Bose device on launch
+- Battery % in the menu bar title when connected
+- Mode list loaded from the headphones; tap to switch
+- Live sync every 2s + unsolicited updates (phone / on-ear changes)
 
 ## Run
-
-```bash
-cd BoseQC
-open BoseQC.xcodeproj
-```
-
-Or:
 
 ```bash
 cd BoseQC
@@ -32,19 +21,10 @@ xcodebuild -scheme BoseQC -configuration Debug -derivedDataPath ../.derived buil
 open ../.derived/Build/Products/Debug/BoseQC.app
 ```
 
-1. Power the headphones and connect them in System Settings if needed.
-2. Open BoseQC → **Find headphones** → **Connect**.
-3. Modes appear from the device; tap one to switch.
+Look for the headphones icon in the menu bar (top right). Quit from the menu.
 
-## Why not BLE?
+## Notes
 
-BLE FEBE can show `Device error 0x14` / timeouts on QuietComfort Headphones. ANChor and bosectl use RFCOMM for the same BMAP packets; that is the reliable path here.
-
-## Layout
-
-```
-BoseQC/
-  BMAP/BmapPacket.swift
-  Bluetooth/BoseBluetoothClient.swift   # IOBluetooth RFCOMM
-  UI/ContentView.swift
-```
+- Pair headphones in System Settings first.
+- If RFCOMM fails, disconnect/reconnect the headphones once (channel lock).
+- `LSUIElement` is on — no Dock tile.

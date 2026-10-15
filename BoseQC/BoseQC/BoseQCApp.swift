@@ -2,17 +2,36 @@ import SwiftUI
 
 @main
 struct BoseQCApp: App {
-    @StateObject private var ble = BoseBluetoothClient()
+    @StateObject private var session = BoseBluetoothClient()
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(ble)
-                .task {
-                    // Headphones already linked in System Settings → open RFCOMM immediately.
-                    ble.connectPreferred()
-                }
+        MenuBarExtra {
+            MenuBarView()
+                .environmentObject(session)
+        } label: {
+            Label {
+                Text(menuBarTitle)
+            } icon: {
+                Image(systemName: menuBarSymbol)
+            }
         }
-        .defaultSize(width: 420, height: 480)
+        .menuBarExtraStyle(.menu)
+    }
+
+    private var menuBarSymbol: String {
+        if session.phase == .ready {
+            return "headphones"
+        }
+        if session.phase == .connecting {
+            return "headphones"
+        }
+        return "headphones.slash"
+    }
+
+    private var menuBarTitle: String {
+        guard session.phase == .ready, let battery = session.state.batteryPercent else {
+            return ""
+        }
+        return " \(battery)%"
     }
 }
