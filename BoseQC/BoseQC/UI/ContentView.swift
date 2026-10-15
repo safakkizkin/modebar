@@ -121,7 +121,7 @@ struct ContentView: View {
             Spacer(minLength: 0)
 
             Button("Refresh") {
-                Task { await ble.refresh() }
+                Task { await ble.refresh(full: true) }
             }
             .buttonStyle(.bordered)
         }

@@ -44,6 +44,7 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
     @Published private(set) var statusMessage: String = "Idle"
 
     private let worker = RFCOMMWorker()
+    private var pollTask: Task<Void, Never>?
 
     private static let nameHints = [
         "quietcomfort", "qc ultra", "qc earbuds", "onyx", "dark star", "bose"
@@ -54,11 +55,18 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
         worker.onClosed = { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
+                self.stopPolling()
                 if self.phase == .ready || self.phase == .connecting {
                     self.phase = .idle
                     self.statusMessage = "Disconnected"
                     self.state.lastError = nil
                 }
+            }
+        }
+        // Bose Music (phone) changes arrive as unsolicited STATUS on RFCOMM.
+        worker.onUnsolicited = { [weak self] packet in
+            Task { @MainActor in
+                self?.applyUnsolicited(packet)
             }
         }
     }
@@ -103,8 +111,10 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
                 try await worker.open(address: item.address, name: item.name, timeout: 20)
                 phase = .ready
                 statusMessage = "Ready"
-                await refresh()
+                await refresh(full: true)
+                startPolling()
             } catch {
+                stopPolling()
                 phase = .failed
                 statusMessage = error.localizedDescription
                 state.lastError = error.localizedDescription
@@ -114,25 +124,68 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
     }
 
     func disconnect() {
+        stopPolling()
         worker.close()
         phase = .idle
         statusMessage = "Disconnected"
         state = LiveHeadphoneState()
     }
 
-    func refresh() async {
+    /// - Parameter full: also rediscover mode list (opening / manual Refresh).
+    func refresh(full: Bool = false) async {
         guard phase == .ready else { return }
-        statusMessage = "Syncing…"
+        if full { statusMessage = "Syncing…" }
         do {
-            _ = try await queryName()
+            if full {
+                _ = try await queryName()
+                state.modes = await discoverModes()
+            }
             _ = try await queryBattery()
-            state.modes = await discoverModes()
             _ = try await queryCurrentMode()
             state.lastError = nil
-            statusMessage = "Ready"
+            if full || statusMessage == "Syncing…" { statusMessage = "Ready" }
         } catch {
-            state.lastError = error.localizedDescription
-            statusMessage = error.localizedDescription
+            // Keep UI usable while poll retries; only surface sticky errors on full refresh.
+            if full {
+                state.lastError = error.localizedDescription
+                statusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func startPolling() {
+        stopPolling()
+        pollTask = Task { @MainActor [weak self] in
+            while let self, !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard !Task.isCancelled, self.phase == .ready else { continue }
+                // Pull what the phone may have changed (mode / battery).
+                await self.refresh(full: false)
+            }
+        }
+    }
+
+    private func stopPolling() {
+        pollTask?.cancel()
+        pollTask = nil
+    }
+
+    private func applyUnsolicited(_ packet: BmapPacket) {
+        // AudioModes current-mode STATUS from the headset (e.g. Bose Music / on-ear button).
+        if packet.block == BmapBlock.audioModes.rawValue,
+           packet.function == 0x03,
+           packet.op == BmapOperator.status.rawValue,
+           let index = packet.payload.first {
+            state.modeIndex = index
+            state.modeLabel = state.modes.first(where: { $0.index == index })?.name ?? "Mode \(index)"
+            statusMessage = "Ready"
+        }
+        // Battery STATUS
+        if packet.block == BmapBlock.status.rawValue,
+           packet.function == 0x02,
+           packet.op == BmapOperator.status.rawValue,
+           let percent = packet.payload.first.map(Int.init) {
+            state.batteryPercent = percent
         }
     }
 
@@ -287,6 +340,7 @@ final class BoseBluetoothClient: NSObject, ObservableObject {
 
 private final class RFCOMMWorker: NSObject, IOBluetoothRFCOMMChannelDelegate {
     var onClosed: (() -> Void)?
+    var onUnsolicited: ((BmapPacket) -> Void)?
 
     private var thread: Thread!
     private var runLoop: RunLoop?
@@ -471,10 +525,13 @@ private final class RFCOMMWorker: NSObject, IOBluetoothRFCOMMChannelDelegate {
         log.info("RX \(bytes.prefix(24).map { String(format: "%02X", $0) }.joined(separator: " "))")
         let data = Data(bytes)
         smokeFlag?.hit = true
-        guard BmapPacket.decode(data) != nil else { return }
+        guard let packet = BmapPacket.decode(data) else { return }
         if let box = activeBox {
             activeBox = nil
             _ = box.finish(.success(data))
+        } else {
+            // No in-flight request → phone / buttons pushed state to us.
+            onUnsolicited?(packet)
         }
     }
 
