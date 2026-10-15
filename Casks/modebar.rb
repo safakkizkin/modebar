@@ -7,7 +7,7 @@ cask "modebar" do
   desc "Menu bar controller for QuietComfort-class headphones (BMAP over RFCOMM)"
   homepage "https://github.com/safakkizkin/modebar"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "ModeBar.app"
 
