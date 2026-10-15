@@ -5,8 +5,6 @@ struct ModeBarApp: App {
     @StateObject private var session = HeadphoneSession()
 
     var body: some Scene {
-        // MenuBarExtra labels must stay Label + Image (template). Custom Shape
-        // views often render blank in the system menu bar.
         MenuBarExtra {
             MenuBarView()
                 .environmentObject(session)
@@ -14,7 +12,7 @@ struct ModeBarApp: App {
             Label {
                 Text(menuBarTitle)
             } icon: {
-                Image("ModeBarMark")
+                Image(nsImage: ModeBarMarkImage.template(pointSize: 16))
                     .renderingMode(.template)
                     .opacity(iconOpacity)
             }
@@ -26,11 +24,11 @@ struct ModeBarApp: App {
         (session.phase == .ready || session.phase == .connecting) ? 1 : 0.55
     }
 
-    /// Non-empty title keeps the extra visible even if the image fails to load.
+    /// Empty when connected so only the mark (+ optional battery) shows — no "ModeBar" clutter.
     private var menuBarTitle: String {
         if session.phase == .ready, let battery = session.state.batteryPercent {
             return "\(battery)%"
         }
-        return "ModeBar"
+        return ""
     }
 }

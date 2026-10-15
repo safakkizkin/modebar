@@ -267,13 +267,14 @@ final class HeadphoneSession: NSObject, ObservableObject {
             maxIndex = 5
         }
         for index in 0...maxIndex {
-            if let name = try? await modeName(for: index), !name.isEmpty {
+            if let name = try? await modeName(for: index) {
                 modes.append(DeviceMode(index: index, name: name))
             }
         }
         return modes
     }
 
+    /// Named modes only — skip empty / unknown slots (those used to show up as bare "Mode").
     private func modeName(for index: UInt8) async throws -> String {
         let data = try await worker.send(BmapCommands.queryModeConfig(index: index).encode(), timeout: 2.0)
         guard let packet = BmapPacket.decode(data),
@@ -283,16 +284,19 @@ final class HeadphoneSession: NSObject, ObservableObject {
         }
         let end = min(38, packet.payload.count)
         let nameBytes = packet.payload.subdata(in: 6..<end).prefix { $0 != 0 }
-        if let name = String(bytes: nameBytes, encoding: .utf8), !name.isEmpty {
+        if let name = String(bytes: nameBytes, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !name.isEmpty,
+           name.caseInsensitiveCompare("Mode") != .orderedSame {
             return name
         }
-        if packet.payload.count > 2 {
-            return Self.promptName(packet.payload[2])
+        if packet.payload.count > 2, let known = Self.promptName(packet.payload[2]) {
+            return known
         }
-        return "Mode \(index)"
+        throw BoseError.emptyPayload
     }
 
-    private static func promptName(_ id: UInt8) -> String {
+    private static func promptName(_ id: UInt8) -> String? {
         switch id {
         case 1: return "Quiet"
         case 2: return "Aware"
@@ -300,7 +304,7 @@ final class HeadphoneSession: NSObject, ObservableObject {
         case 7: return "Commute"
         case 34: return "Immersion"
         case 36: return "Cinema"
-        default: return "Mode"
+        default: return nil
         }
     }
 

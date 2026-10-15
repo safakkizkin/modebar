@@ -12,9 +12,6 @@ struct MenuBarView: View {
                 if let battery = session.state.batteryPercent {
                     Text("Battery \(battery)%")
                 }
-                if let mode = session.state.modeLabel {
-                    Text(mode)
-                }
 
                 Divider()
 
@@ -23,19 +20,13 @@ struct MenuBarView: View {
                 } else {
                     ForEach(session.state.modes) { mode in
                         let selected = session.state.modeIndex == mode.index
-                        Button((selected ? "✓ " : "    ") + mode.name) {
+                        Button {
                             Task { await session.setMode(index: mode.index) }
+                        } label: {
+                            // Native checkmark via attributed title keeps spacing clean.
+                            Text((selected ? "✓ " : "    ") + mode.name)
                         }
                     }
-                }
-
-                Divider()
-
-                Button("Refresh") {
-                    Task { await session.refresh(full: true) }
-                }
-                Button("Disconnect") {
-                    session.disconnect()
                 }
             } else if session.phase == .connecting {
                 Text(session.statusMessage)
