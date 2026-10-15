@@ -1,9 +1,14 @@
 name: Release
 
+# Package locally with ./scripts/package.sh and `gh release create` so the
+# Homebrew cask sha256 matches the uploaded zip. Use this workflow only when
+# you intentionally want CI to build and attach artifacts.
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without v prefix (e.g. 0.1.1)"
+        required: true
 
 permissions:
   contents: write
@@ -21,7 +26,7 @@ jobs:
       - name: Package
         id: pkg
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ inputs.version }}"
           ./scripts/package.sh "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "sha256=$(cut -d' ' -f1 "dist/ModeBar-${VERSION}.zip.sha256")" >> "$GITHUB_OUTPUT"
@@ -29,16 +34,11 @@ jobs:
       - name: Upload GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ inputs.version }}
           files: |
             dist/ModeBar-*.zip
             dist/ModeBar-*.zip.sha256
           generate_release_notes: true
           body: |
-            Unsigned ad-hoc build. After download:
-
-            ```bash
-            xattr -dr com.apple.quarantine /Applications/ModeBar.app
-            ```
-
-            Homebrew cask `sha256` for this tag: `${{ steps.pkg.outputs.sha256 }}`
-            Update `Casks/modebar.rb` version + sha256 in a follow-up commit if needed.
+            CI-built artifact. Update `Casks/modebar.rb` sha256 to:
+            `${{ steps.pkg.outputs.sha256 }}`
