@@ -1,7 +1,6 @@
 cask "modebar" do
   version "0.1.0"
-  # Fill sha256 from `./scripts/package.sh #{version}` after the first GitHub Release.
-  sha256 "REPLACE_WITH_SHA256_FROM_scripts_package_sh"
+  sha256 "1a05531e2a61e3ecbe8812e79dcc455832e65c35a13cfee205e5070639d83b1f"
 
   url "https://github.com/safakkizkin/modebar/releases/download/v#{version}/ModeBar-#{version}.zip"
   name "ModeBar"

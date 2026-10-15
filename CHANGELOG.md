@@ -7,11 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-15
+
 ### Added
 
 - Open-source GitHub layout: contributing guide, security policy, CI, release workflow
-
-## [0.1.0] - 2026-10-15
+- Homebrew cask with published `ModeBar-0.1.0.zip` release artifact
 
 ### Added
 
